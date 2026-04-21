@@ -1,9 +1,12 @@
 /* ============================================================
  * Manga Spread Viewer (Userscript edition)
- * Version: 2.0.3
+ * Version: 2.0.4
  * Updated: 2026-04-21
  *
  * Changelog:
+ *   2.0.4 - loadNextChapter でクリック時に次章URLを再計算。
+ *           startViewer 実行時のタイミング依存で nextChapterUrl
+ *           が null になる問題を回避。
  *   2.0.3 - サイト側のJSに location.href 書き込みが阻害される
  *           問題に対応。location.replace と a タグclick の
  *           二段構えで遷移を試行。
@@ -15,12 +18,11 @@
  *   2.0.0 - Userscript 化。ドメイン別の自動起動トグル、
  *           Tampermonkey メニュー、起動ボタンに対応。
  *   1.3.0 - iframe 方式を撤回し、再タップ方式に一本化。
- * ============================================================ */
 
 (() => {
   'use strict';
 
-  const VERSION = '2.0.3';
+  const VERSION = '2.0.4';
   const DOMAIN = location.hostname;
   const AUTO_KEY = 'auto:' + DOMAIN;
 
@@ -298,12 +300,13 @@
     };
 
     const loadNextChapter = () => {
-      if (!nextChapterUrl) return;
+      const url = findNextChapterUrl() || nextChapterUrl;
+      if (!url) return;
       try {
-        location.replace(nextChapterUrl);
+        location.replace(url);
       } catch (e) {
         const a = document.createElement('a');
-        a.href = nextChapterUrl;
+        a.href = url;
         a.rel = 'noopener';
         document.body.appendChild(a);
         a.click();
