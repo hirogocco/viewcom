@@ -1,9 +1,12 @@
 /* ============================================================
  * Manga Spread Viewer (Userscript edition)
- * Version: 2.0.2
+ * Version: 2.0.3
  * Updated: 2026-04-21
  *
  * Changelog:
+ *   2.0.3 - サイト側のJSに location.href 書き込みが阻害される
+ *           問題に対応。location.replace と a タグclick の
+ *           二段構えで遷移を試行。
  *   2.0.2 - findNextChapterUrl の URL 比較を正規化。
  *           末尾の #、?、/ の違いで次章URLが取れない
  *           問題を修正。
@@ -296,7 +299,16 @@
 
     const loadNextChapter = () => {
       if (!nextChapterUrl) return;
-      location.href = nextChapterUrl;
+      try {
+        location.replace(nextChapterUrl);
+      } catch (e) {
+        const a = document.createElement('a');
+        a.href = nextChapterUrl;
+        a.rel = 'noopener';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      }
     };
 
     const close = () => {
