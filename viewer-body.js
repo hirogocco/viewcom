@@ -47,11 +47,15 @@
   };
 
   const findNextChapterUrl = () => {
+    const normalize = (url) => {
+      if (!url) return '';
+      return url.replace(/[#?].*$/, '').replace(/\/$/, '');
+    };
     const sel = document.querySelector('select.chapter-select');
     if (sel) {
       const options = Array.from(sel.querySelectorAll('option'));
-      const curIdx = options.findIndex(o => o.value === location.href ||
-        location.href.startsWith(o.value) || o.value.startsWith(location.href));
+      const curNorm = normalize(location.href);
+      const curIdx = options.findIndex(o => normalize(o.value) === curNorm);
       if (curIdx > 0) return options[curIdx - 1].value;
     }
 
