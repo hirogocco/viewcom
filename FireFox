@@ -1,12 +1,12 @@
 // ==UserScript==
 // @name         Manga Spread Viewer (loader)
 // @namespace    https://github.com/hirogocco/viewcom
-// @version      2.0.5
+// @version      2.0.８
 // @description  漫画サイト用 見開きビューア(ローダー)
 // @match        *://*/*
 // @run-at       document-idle
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_registerMenuCommand
-// @require      https://cdn.jsdelivr.net/gh/hirogocco/viewcom@3444452/viewer-body.js
+// @require      https://cdn.jsdelivr.net/gh/hirogocco/viewcom@8dac781/viewer-body.js
 // ==/UserScript==
