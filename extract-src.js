@@ -1,4 +1,20 @@
+/* ============================================================
+ * Manga Spread Viewer
+ * Version: 1.1.0
+ * Updated: 2026-04-21
+ *
+ * Changelog:
+ *   1.1.0 - 次章への引き継ぎ方式を変更。「次の章へ」タップで
+ *           通常遷移し、新ページでブックマークレットを再実行
+ *           すると sessionStorage から続行。トースト表示あり。
+ *   1.0.0 - 初回リリース。見開き・タップ操作・閉じる・ずらす。
+ * ============================================================ */
+
 (() => {
+  const VERSION = '1.1.0';
+  const RESUME_KEY = '__mv_resume_v1';
+  const RESUME_TTL = 2 * 60 * 1000; // 2分以内の再起動なら「続行」とみなす
+
   if (document.getElementById('__mv_viewer')) return;
 
   const SELECTORS = [
@@ -8,27 +24,18 @@
     '.chapter-container img',
   ];
 
-  const extractImageUrls = (root, baseUrl) => {
+  const extractImageUrls = () => {
     let imgs = [];
     for (const sel of SELECTORS) {
-      imgs = Array.from(root.querySelectorAll(sel));
+      imgs = Array.from(document.querySelectorAll(sel));
       if (imgs.length > 0) break;
     }
-    const resolve = (href) => {
-      if (!href) return null;
-      try { return new URL(href, baseUrl).href; } catch { return null; }
-    };
     return imgs
-      .map(i => resolve(
-        i.getAttribute('data-original') ||
-        i.getAttribute('data-cdn') ||
-        i.getAttribute('data-src') ||
-        i.getAttribute('src')
-      ))
+      .map(i => i.dataset.original || i.dataset.cdn || i.dataset.src || i.src)
       .filter(Boolean);
   };
 
-  const findNextChapterUrl = (root, baseUrl) => {
+  const findNextChapterUrl = () => {
     const candidates = [
       'a[rel="next"]',
       'a.next',
@@ -36,27 +43,35 @@
       '.nav-next a',
       'a.next_page',
     ];
-    const resolve = (href) => {
-      if (!href) return null;
-      try { return new URL(href, baseUrl).href; } catch { return null; }
-    };
     for (const sel of candidates) {
-      const el = root.querySelector(sel);
-      const href = el && el.getAttribute('href');
-      const resolved = resolve(href);
-      if (resolved) return resolved;
+      const el = document.querySelector(sel);
+      if (el && el.href) return el.href;
     }
-    const links = Array.from(root.querySelectorAll('a'));
-    const next = links.find(a => /次|next|→|>>/i.test(a.textContent.trim()) && a.getAttribute('href'));
-    return next ? resolve(next.getAttribute('href')) : null;
+    const links = Array.from(document.querySelectorAll('a'));
+    const next = links.find(a => /次|next|→|>>/i.test(a.textContent.trim()) && a.href);
+    return next ? next.href : null;
   };
 
-  const urls = extractImageUrls(document, location.href);
+  const urls = extractImageUrls();
   if (urls.length === 0) {
     alert('画像が見つかりませんでした。');
     return;
   }
-  let nextChapterUrl = findNextChapterUrl(document, location.href);
+  const nextChapterUrl = findNextChapterUrl();
+
+  let resumedFromPrev = false;
+  try {
+    const raw = sessionStorage.getItem(RESUME_KEY);
+    if (raw) {
+      const saved = JSON.parse(raw);
+      if (saved && saved.version === VERSION &&
+          typeof saved.ts === 'number' &&
+          Date.now() - saved.ts < RESUME_TTL) {
+        resumedFromPrev = true;
+      }
+      sessionStorage.removeItem(RESUME_KEY);
+    }
+  } catch {}
 
   const BREAKPOINT = 600;
   const state = { index: 0 };
@@ -98,9 +113,13 @@
         font: 14px/1 sans-serif; cursor: pointer;
         -webkit-tap-highlight-color: transparent;
       }
-      .__mv_btn:disabled { opacity: 0.5; }
       #__mv_close { top: 10px; right: 10px; }
       #__mv_shift { top: 10px; left: 10px; }
+      #__mv_version {
+        position: absolute; bottom: 6px; right: 8px; z-index: 3;
+        color: rgba(255,255,255,0.4); font: 10px/1 sans-serif;
+        pointer-events: none;
+      }
       #__mv_next_chapter {
         top: 50%; left: 50%; transform: translate(-50%, -50%);
         padding: 16px 24px; font-size: 16px;
@@ -114,14 +133,26 @@
         display: none;
       }
       #__mv_end_msg.show { display: block; }
+      #__mv_toast {
+        position: absolute; top: 50%; left: 50%;
+        transform: translate(-50%, -50%);
+        background: rgba(0,0,0,0.75); color: #fff;
+        padding: 12px 20px; border-radius: 8px;
+        font: 14px sans-serif; z-index: 4;
+        opacity: 0; transition: opacity 0.3s;
+        pointer-events: none;
+      }
+      #__mv_toast.show { opacity: 1; }
     </style>
     <div id="__mv_stage"></div>
     <div id="__mv_tap_next"></div>
     <div id="__mv_tap_prev"></div>
-    <button class="__mv_btn" id="__mv_close">✕ 閉じる</button>
+    <button class="__mv_btn" id="__mv_close" title="v${VERSION}">✕ 閉じる</button>
     <button class="__mv_btn" id="__mv_shift">⇄ 1枚ずらす</button>
     <div id="__mv_end_msg">最終ページです</div>
     <button class="__mv_btn" id="__mv_next_chapter">次の章へ →</button>
+    <div id="__mv_toast"></div>
+    <div id="__mv_version">v${VERSION}</div>
   `;
   document.body.appendChild(root);
   const prevOverflow = document.documentElement.style.overflow;
@@ -130,6 +161,13 @@
   const stage = root.querySelector('#__mv_stage');
   const endMsg = root.querySelector('#__mv_end_msg');
   const nextChapterBtn = root.querySelector('#__mv_next_chapter');
+  const toast = root.querySelector('#__mv_toast');
+
+  const showToast = (msg, ms = 1500) => {
+    toast.textContent = msg;
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), ms);
+  };
 
   const isDouble = () => window.innerWidth >= BREAKPOINT;
 
@@ -189,38 +227,15 @@
     }
   };
 
-  const loadNextChapter = async () => {
+  const loadNextChapter = () => {
     if (!nextChapterUrl) return;
-    const targetUrl = nextChapterUrl;
-    const originalLabel = nextChapterBtn.textContent;
-    nextChapterBtn.textContent = '読み込み中…';
-    nextChapterBtn.disabled = true;
     try {
-      const res = await fetch(targetUrl, { credentials: 'include' });
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      const html = await res.text();
-      const doc = new DOMParser().parseFromString(html, 'text/html');
-
-      const newUrls = extractImageUrls(doc, targetUrl);
-      if (newUrls.length === 0) throw new Error('no images in next chapter');
-
-      const newNext = findNextChapterUrl(doc, targetUrl);
-
-      const startIndex = urls.length;
-      urls.push(...newUrls);
-      nextChapterUrl = newNext;
-
-      history.replaceState(null, '', targetUrl);
-
-      state.index = startIndex;
-      render();
-    } catch (err) {
-      console.warn('[viewer] next chapter load failed:', err);
-      location.href = targetUrl;
-    } finally {
-      nextChapterBtn.textContent = originalLabel;
-      nextChapterBtn.disabled = false;
-    }
+      sessionStorage.setItem(RESUME_KEY, JSON.stringify({
+        version: VERSION,
+        ts: Date.now(),
+      }));
+    } catch {}
+    location.href = nextChapterUrl;
   };
 
   const close = () => {
@@ -243,4 +258,5 @@
   window.addEventListener('resize', onResize);
 
   render();
+  if (resumedFromPrev) showToast('前の章から続行');
 })();
