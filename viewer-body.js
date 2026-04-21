@@ -1,9 +1,11 @@
 /* ============================================================
  * Manga Spread Viewer (Userscript edition)
- * Version: 2.0.6
+ * Version: 2.0.7
  * Updated: 2026-04-21
  *
  * Changelog:
+ *   2.0.7 - 左右に「次の章 →」ボタンを常時表示(次章がある場合のみ)。
+ *           中央の「次の章へ」ボタンは廃止。
  *   2.0.6 - 最終画像でのタップで直接次章へ遷移。中間の「最終ページです」
  *           表示は次章がない場合(最終章)のみ表示。
  *   2.0.5 - 最終ページでの画面上70%タップを「次の章へ」と同一挙動に変更。
@@ -28,7 +30,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '2.0.6';
+  const VERSION = '2.0.7';
   const DOMAIN = location.hostname;
   const AUTO_KEY = 'auto:' + DOMAIN;
 
@@ -184,17 +186,18 @@
         }
         #__mv_close { top: 10px; right: 10px; }
         #__mv_shift { top: 10px; left: 10px; }
+        .__mv_next_side {
+          top: 54px;
+          display: none;
+        }
+        .__mv_next_side.show { display: block; }
+        #__mv_next_left { left: 10px; }
+        #__mv_next_right { right: 10px; }
         #__mv_version {
           position: absolute; bottom: 6px; right: 8px; z-index: 3;
           color: rgba(255,255,255,0.4); font: 10px/1 sans-serif;
           pointer-events: none;
         }
-        #__mv_next_chapter {
-          top: 50%; left: 50%; transform: translate(-50%, -50%);
-          padding: 16px 24px; font-size: 16px;
-          display: none;
-        }
-        #__mv_next_chapter.show { display: block; }
         #__mv_end_msg {
           position: absolute; top: 35%; left: 50%;
           transform: translate(-50%, -50%);
@@ -219,8 +222,9 @@
       <div id="__mv_tap_prev"></div>
       <button class="__mv_btn" id="__mv_close" title="v${VERSION} / ビューア終了 & 自動モードOFF">✕ 終了</button>
       <button class="__mv_btn" id="__mv_shift">⇄ 1枚ずらす</button>
+      <button class="__mv_btn __mv_next_side" id="__mv_next_left">次の章 →</button>
+      <button class="__mv_btn __mv_next_side" id="__mv_next_right">次の章 →</button>
       <div id="__mv_end_msg">最終ページです</div>
-      <button class="__mv_btn" id="__mv_next_chapter">次の章へ →</button>
       <div id="__mv_toast"></div>
       <div id="__mv_version">v${VERSION}</div>
     `;
@@ -230,7 +234,8 @@
 
     const stage = root.querySelector('#__mv_stage');
     const endMsg = root.querySelector('#__mv_end_msg');
-    const nextChapterBtn = root.querySelector('#__mv_next_chapter');
+    const nextLeft = root.querySelector('#__mv_next_left');
+    const nextRight = root.querySelector('#__mv_next_right');
     const toast = root.querySelector('#__mv_toast');
 
     const showToast = (msg, ms = 1500) => {
@@ -242,22 +247,28 @@
 
     const isDouble = () => window.innerWidth >= BREAKPOINT;
 
+    const updateSideBtns = () => {
+      const show = !!nextChapterUrl;
+      nextLeft.classList.toggle('show', show);
+      nextRight.classList.toggle('show', show);
+    };
+
     const render = () => {
       const step = isDouble() ? 2 : 1;
       const i = state.index;
       stage.innerHTML = '';
       stage.classList.toggle('single', step === 1);
 
+      updateSideBtns();
+
       const atEnd = i >= urls.length;
       root.classList.toggle('end', atEnd);
 
       if (atEnd) {
         endMsg.classList.add('show');
-        nextChapterBtn.classList.toggle('show', !!nextChapterUrl);
         return;
       }
       endMsg.classList.remove('show');
-      nextChapterBtn.classList.remove('show');
 
       const first = document.createElement('img');
       first.src = urls[i];
@@ -341,7 +352,8 @@
     root.querySelector('#__mv_tap_prev').addEventListener('click', goPrev);
     root.querySelector('#__mv_close').addEventListener('click', close);
     root.querySelector('#__mv_shift').addEventListener('click', shiftOne);
-    nextChapterBtn.addEventListener('click', loadNextChapter);
+    nextLeft.addEventListener('click', loadNextChapter);
+    nextRight.addEventListener('click', loadNextChapter);
 
     let resizeTimer;
     const onResize = () => {
