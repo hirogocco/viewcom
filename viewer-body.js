@@ -5,6 +5,7 @@
  *
  * Changelog:
  *   2.0.7 - 左右に「次の章 →」ボタンを常時表示(次章がある場合のみ)。
+ *           画像下の左右に配置、誤タップ防止のため上部ボタンとは分離。
  *           中央の「次の章へ」ボタンは廃止。
  *   2.0.6 - 最終画像でのタップで直接次章へ遷移。中間の「最終ページです」
  *           表示は次章がない場合(最終章)のみ表示。
@@ -187,7 +188,7 @@
         #__mv_close { top: 10px; right: 10px; }
         #__mv_shift { top: 10px; left: 10px; }
         .__mv_next_side {
-          top: 54px;
+          bottom: 10px;
           display: none;
         }
         .__mv_next_side.show { display: block; }
