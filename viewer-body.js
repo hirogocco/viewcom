@@ -1,9 +1,11 @@
 /* ============================================================
  * Manga Spread Viewer (Userscript edition)
- * Version: 2.0.5
+ * Version: 2.0.6
  * Updated: 2026-04-21
  *
  * Changelog:
+ *   2.0.6 - 最終画像でのタップで直接次章へ遷移。中間の「最終ページです」
+ *           表示は次章がない場合(最終章)のみ表示。
  *   2.0.5 - 最終ページでの画面上70%タップを「次の章へ」と同一挙動に変更。
  *           タップ領域とボタンの挙動を一貫させた。
  *           最終ページでも下30%タップで前ページに戻れるように。
@@ -26,7 +28,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '2.0.5';
+  const VERSION = '2.0.6';
   const DOMAIN = location.hostname;
   const AUTO_KEY = 'auto:' + DOMAIN;
 
@@ -295,12 +297,22 @@
     };
 
     const goNext = () => {
-      if (state.index >= urls.length) {
-        loadNextChapter();
+      const step = isDouble() ? 2 : 1;
+      const nextIndex = state.index + step;
+      
+      if (nextIndex >= urls.length) {
+        const url = findNextChapterUrl() || nextChapterUrl;
+        if (url) {
+          loadNextChapter();
+          return;
+        }
+        if (state.index >= urls.length) return;
+        state.index = urls.length;
+        render();
         return;
       }
-      const step = isDouble() ? 2 : 1;
-      state.index = Math.min(state.index + step, urls.length);
+      
+      state.index = nextIndex;
       render();
     };
 
