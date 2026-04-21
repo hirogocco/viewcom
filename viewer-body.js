@@ -351,6 +351,9 @@
     });
   } catch {}
 
-  if (getAuto()) {
+if (getAuto()) {
     startViewer();
-  } else if (isChapterPage()
+  } else if (isChapterPage()) {
+    showLaunchButton();
+  }
+})();
