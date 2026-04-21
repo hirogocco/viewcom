@@ -1,9 +1,12 @@
 /* ============================================================
  * Manga Spread Viewer (Userscript edition)
- * Version: 2.0.4
+ * Version: 2.0.5
  * Updated: 2026-04-21
  *
  * Changelog:
+ *   2.0.5 - 最終ページでの画面上70%タップを「次の章へ」と同一挙動に変更。
+ *           タップ領域とボタンの挙動を一貫させた。
+ *           最終ページでも下30%タップで前ページに戻れるように。
  *   2.0.4 - loadNextChapter でクリック時に次章URLを再計算。
  *           startViewer 実行時のタイミング依存で nextChapterUrl
  *           が null になる問題を回避。
@@ -23,7 +26,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '2.0.4';
+  const VERSION = '2.0.5';
   const DOMAIN = location.hostname;
   const AUTO_KEY = 'auto:' + DOMAIN;
 
@@ -169,10 +172,6 @@
         }
         #__mv_tap_next { top: 0; height: 70%; }
         #__mv_tap_prev { bottom: 0; height: 30%; }
-        #__mv_viewer.end #__mv_tap_next,
-        #__mv_viewer.end #__mv_tap_prev {
-          pointer-events: none;
-        }
         .__mv_btn {
           position: absolute; z-index: 3;
           background: rgba(0,0,0,0.6); color: #fff;
@@ -280,9 +279,27 @@
       }
     };
 
+    const loadNextChapter = () => {
+      const url = findNextChapterUrl() || nextChapterUrl;
+      if (!url) return;
+      try {
+        location.replace(url);
+      } catch (e) {
+        const a = document.createElement('a');
+        a.href = url;
+        a.rel = 'noopener';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      }
+    };
+
     const goNext = () => {
+      if (state.index >= urls.length) {
+        loadNextChapter();
+        return;
+      }
       const step = isDouble() ? 2 : 1;
-      if (state.index >= urls.length) return;
       state.index = Math.min(state.index + step, urls.length);
       render();
     };
@@ -297,21 +314,6 @@
       if (state.index + 1 < urls.length) {
         state.index += 1;
         render();
-      }
-    };
-
-    const loadNextChapter = () => {
-      const url = findNextChapterUrl() || nextChapterUrl;
-      if (!url) return;
-      try {
-        location.replace(url);
-      } catch (e) {
-        const a = document.createElement('a');
-        a.href = url;
-        a.rel = 'noopener';
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
       }
     };
 
@@ -367,7 +369,7 @@
     });
   } catch {}
 
-if (getAuto()) {
+  if (getAuto()) {
     startViewer();
   } else if (isChapterPage()) {
     showLaunchButton();
