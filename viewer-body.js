@@ -20,7 +20,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '2.0.2';
+  const VERSION = '2.0.3';
   const DOMAIN = location.hostname;
   const AUTO_KEY = 'auto:' + DOMAIN;
 
