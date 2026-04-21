@@ -1,9 +1,12 @@
 /* ============================================================
  * Manga Spread Viewer (Userscript edition)
- * Version: 2.0.1
+ * Version: 2.0.2
  * Updated: 2026-04-21
  *
  * Changelog:
+ *   2.0.2 - findNextChapterUrl の URL 比較を正規化。
+ *           末尾の #、?、/ の違いで次章URLが取れない
+ *           問題を修正。
  *   2.0.1 - 最終ページで透明タップ領域のクリックが
  *           「次の章へ」ボタンに優先される問題を修正。
  *   2.0.0 - Userscript 化。ドメイン別の自動起動トグル、
@@ -14,7 +17,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '2.0.1';
+  const VERSION = '2.0.2';
   const DOMAIN = location.hostname;
   const AUTO_KEY = 'auto:' + DOMAIN;
 
@@ -350,7 +353,4 @@
 
   if (getAuto()) {
     startViewer();
-  } else if (isChapterPage()) {
-    showLaunchButton();
-  }
-})();
+  } else if (isChapterPage()
