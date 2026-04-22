@@ -1,9 +1,13 @@
 /* ============================================================
  * Manga Spread Viewer (Userscript edition)
- * Version: 2.1.0
+ * Version: 2.1.1
  * Updated: 2026-04-21
  *
  * Changelog:
+ *   2.1.1 - 章をまたぐ見開き結合機能を追加。最終画像からの次章遷移で
+ *           最終画像URLをsessionStorageに保存、次章起動時に画像配列
+ *           先頭へ挿入することで、章を跨いだ見開きペアを自動形成。
+ *           TTL 60秒、同一ドメインのみ有効。
  *   2.1.0 - 横長画像(見開き1枚でアップロード)を自動検出して
  *           単独表示する機能を追加。幅が高さの1.3倍を超えると
  *           横長と判定。戻る操作は履歴管理で進んだ単位と同じに。
@@ -39,9 +43,11 @@
 (() => {
   'use strict';
 
-  const VERSION = '2.1.0';
+  const VERSION = '2.1.1';
   const DOMAIN = location.hostname;
   const AUTO_KEY = 'auto:' + DOMAIN;
+  const BRIDGE_KEY = '__mv_bridge';
+  const BRIDGE_TTL = 60 * 1000;
   const WIDE_RATIO = 1.3;
 
   const SELECTORS = [
@@ -77,6 +83,31 @@
     return imgs
       .map(i => i.dataset.original || i.dataset.cdn || i.dataset.src || i.src)
       .filter(Boolean);
+  };
+
+  const consumeBridge = () => {
+    try {
+      const raw = sessionStorage.getItem(BRIDGE_KEY);
+      if (!raw) return null;
+      sessionStorage.removeItem(BRIDGE_KEY);
+      const data = JSON.parse(raw);
+      if (!data || !data.url || typeof data.ts !== 'number') return null;
+      if (Date.now() - data.ts > BRIDGE_TTL) return null;
+      if (data.fromDomain !== location.hostname) return null;
+      return data.url;
+    } catch {
+      return null;
+    }
+  };
+
+  const saveBridge = (url) => {
+    try {
+      sessionStorage.setItem(BRIDGE_KEY, JSON.stringify({
+        url,
+        ts: Date.now(),
+        fromDomain: location.hostname,
+      }));
+    } catch {}
   };
 
   const findNextChapterUrl = () => {
@@ -154,6 +185,12 @@
       alert('画像が見つかりませんでした。');
       return;
     }
+
+    const bridgedUrl = consumeBridge();
+    if (bridgedUrl) {
+      urls.unshift(bridgedUrl);
+    }
+
     const nextChapterUrl = findNextChapterUrl();
 
     if (launchBtnEl) {
@@ -297,7 +334,6 @@
       nextRight.classList.toggle('show', show);
     };
 
-    // 現在位置から進むべきステップ数を決定(1 or 2)
     const computeStep = async () => {
       if (!isDouble()) return 1;
       const i = state.index;
@@ -352,7 +388,11 @@
       }
     };
 
-    const loadNextChapter = () => {
+    const loadNextChapter = (opts = {}) => {
+      const { saveLast = false } = opts;
+      if (saveLast && urls.length > 0) {
+        saveBridge(urls[urls.length - 1]);
+      }
       const url = findNextChapterUrl() || nextChapterUrl;
       if (!url) return;
       try {
@@ -374,7 +414,7 @@
       if (nextIndex >= urls.length) {
         const url = findNextChapterUrl() || nextChapterUrl;
         if (url) {
-          loadNextChapter();
+          loadNextChapter({ saveLast: true });
           return;
         }
         if (state.index >= urls.length) return;
@@ -416,8 +456,8 @@
     root.querySelector('#__mv_tap_prev').addEventListener('click', goPrev);
     root.querySelector('#__mv_close').addEventListener('click', close);
     root.querySelector('#__mv_shift').addEventListener('click', shiftOne);
-    nextLeft.addEventListener('click', loadNextChapter);
-    nextRight.addEventListener('click', loadNextChapter);
+    nextLeft.addEventListener('click', () => loadNextChapter());
+    nextRight.addEventListener('click', () => loadNextChapter());
 
     let resizeTimer;
     const onResize = () => {
