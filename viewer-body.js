@@ -1,9 +1,12 @@
 /* ============================================================
  * Manga Spread Viewer (Userscript edition)
- * Version: 2.0.9
+ * Version: 2.1.0
  * Updated: 2026-04-21
  *
  * Changelog:
+ *   2.1.0 - 横長画像(見開き1枚でアップロード)を自動検出して
+ *           単独表示する機能を追加。幅が高さの1.3倍を超えると
+ *           横長と判定。戻る操作は履歴管理で進んだ単位と同じに。
  *   2.0.9 - momon-ga.com 対応。#post-hentai img セレクタ追加、
  *           /fanzine/mo数字 を章ページパターンに追加。
  *           章ページ判定で階層浅いページも対象にできるよう変更。
@@ -36,9 +39,10 @@
 (() => {
   'use strict';
 
-  const VERSION = '2.0.9';
+  const VERSION = '2.1.0';
   const DOMAIN = location.hostname;
   const AUTO_KEY = 'auto:' + DOMAIN;
+  const WIDE_RATIO = 1.3;
 
   const SELECTORS = [
     '.page-chapter img',
@@ -158,7 +162,34 @@
     }
 
     const BREAKPOINT = 600;
-    const state = { index: 0 };
+    const state = { index: 0, history: [] };
+    const aspectCache = new Map();
+
+    const getAspect = (url) => {
+      return new Promise((resolve) => {
+        if (aspectCache.has(url)) {
+          resolve(aspectCache.get(url));
+          return;
+        }
+        const img = new Image();
+        img.onload = () => {
+          const info = {
+            width: img.naturalWidth,
+            height: img.naturalHeight,
+            isWide: img.naturalHeight > 0 &&
+              img.naturalWidth / img.naturalHeight > WIDE_RATIO,
+          };
+          aspectCache.set(url, info);
+          resolve(info);
+        };
+        img.onerror = () => {
+          const info = { width: 0, height: 0, isWide: false };
+          aspectCache.set(url, info);
+          resolve(info);
+        };
+        img.src = url;
+      });
+    };
 
     const root = document.createElement('div');
     root.id = '__mv_viewer';
@@ -266,11 +297,22 @@
       nextRight.classList.toggle('show', show);
     };
 
-    const render = () => {
-      const step = isDouble() ? 2 : 1;
+    // 現在位置から進むべきステップ数を決定(1 or 2)
+    const computeStep = async () => {
+      if (!isDouble()) return 1;
+      const i = state.index;
+      if (i >= urls.length) return 1;
+      const cur = await getAspect(urls[i]);
+      if (cur.isWide) return 1;
+      if (i + 1 >= urls.length) return 1;
+      const next = await getAspect(urls[i + 1]);
+      if (next.isWide) return 1;
+      return 2;
+    };
+
+    const render = async () => {
       const i = state.index;
       stage.innerHTML = '';
-      stage.classList.toggle('single', step === 1);
 
       updateSideBtns();
 
@@ -283,15 +325,21 @@
       }
       endMsg.classList.remove('show');
 
+      const step = await computeStep();
+      const showDouble = step === 2;
+
+      stage.classList.toggle('single', !showDouble);
+
       const first = document.createElement('img');
       first.src = urls[i];
       stage.appendChild(first);
 
-      if (step === 2 && i + 1 < urls.length) {
+      if (showDouble && i + 1 < urls.length) {
         const second = document.createElement('img');
         second.src = urls[i + 1];
         stage.appendChild(second);
       }
+
       preload(i + step);
     };
 
@@ -299,8 +347,7 @@
       for (let k = 0; k < 4; k++) {
         const idx = from + k;
         if (idx < urls.length) {
-          const img = new Image();
-          img.src = urls[idx];
+          getAspect(urls[idx]);
         }
       }
     };
@@ -320,10 +367,10 @@
       }
     };
 
-    const goNext = () => {
-      const step = isDouble() ? 2 : 1;
+    const goNext = async () => {
+      const step = await computeStep();
       const nextIndex = state.index + step;
-      
+
       if (nextIndex >= urls.length) {
         const url = findNextChapterUrl() || nextChapterUrl;
         if (url) {
@@ -331,23 +378,27 @@
           return;
         }
         if (state.index >= urls.length) return;
+        state.history.push(urls.length - state.index);
         state.index = urls.length;
         render();
         return;
       }
-      
+
+      state.history.push(step);
       state.index = nextIndex;
       render();
     };
 
     const goPrev = () => {
-      const step = isDouble() ? 2 : 1;
+      if (state.history.length === 0) return;
+      const step = state.history.pop();
       state.index = Math.max(state.index - step, 0);
       render();
     };
 
     const shiftOne = () => {
       if (state.index + 1 < urls.length) {
+        state.history.push(1);
         state.index += 1;
         render();
       }
