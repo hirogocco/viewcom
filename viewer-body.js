@@ -1,9 +1,11 @@
 /* ============================================================
  * Manga Spread Viewer (Userscript edition)
- * Version: 2.0.7
+ * Version: 2.0.8
  * Updated: 2026-04-21
  *
  * Changelog:
+ *   2.0.8 - パスセグメント数が3未満のページでは自動起動・起動ボタンを
+ *           無効化。トップや目次ページでの誤起動を防止。
  *   2.0.7 - 左右に「次の章 →」ボタンを常時表示(次章がある場合のみ)。
  *           画像下の左右に配置、誤タップ防止のため上部ボタンとは分離。
  *           中央の「次の章へ」ボタンは廃止。
@@ -31,7 +33,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '2.0.7';
+  const VERSION = '2.0.8';
   const DOMAIN = location.hostname;
   const AUTO_KEY = 'auto:' + DOMAIN;
 
@@ -44,6 +46,12 @@
 
   const CHAPTER_URL_PATTERN = /chapter[-_]?\d/i;
   const isChapterPage = () => CHAPTER_URL_PATTERN.test(location.href);
+
+  const PATH_DEPTH_THRESHOLD = 3;
+  const isDeepEnough = () => {
+    const segments = location.pathname.split('/').filter(s => s.length > 0);
+    return segments.length >= PATH_DEPTH_THRESHOLD;
+  };
 
   const getAuto = () => {
     try { return GM_getValue(AUTO_KEY, false); } catch { return false; }
@@ -393,6 +401,8 @@
       showToastFloating(`${DOMAIN}: 自動起動OFF`);
     });
   } catch {}
+
+  if (!isDeepEnough()) return;
 
   if (getAuto()) {
     startViewer();
