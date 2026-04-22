@@ -1,9 +1,12 @@
 /* ============================================================
  * Manga Spread Viewer (Userscript edition)
- * Version: 2.1.1
+ * Version: 2.1.2
  * Updated: 2026-04-21
  *
  * Changelog:
+ *   2.1.2 - 最終画像が縦長で単独表示される場合、その単独表示をスキップして
+ *           直接次章へ遷移する最適化を追加。次章起動時に前章最終と
+ *           次章P1が見開きペアとして表示される流れがよりスムーズに。
  *   2.1.1 - 章をまたぐ見開き結合機能を追加。最終画像からの次章遷移で
  *           最終画像URLをsessionStorageに保存、次章起動時に画像配列
  *           先頭へ挿入することで、章を跨いだ見開きペアを自動形成。
@@ -43,7 +46,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '2.1.1';
+  const VERSION = '2.1.2';
   const DOMAIN = location.hostname;
   const AUTO_KEY = 'auto:' + DOMAIN;
   const BRIDGE_KEY = '__mv_bridge';
@@ -408,26 +411,41 @@
     };
 
     const goNext = async () => {
-      const step = await computeStep();
-      const nextIndex = state.index + step;
+  const step = await computeStep();
+  const nextIndex = state.index + step;
 
-      if (nextIndex >= urls.length) {
-        const url = findNextChapterUrl() || nextChapterUrl;
-        if (url) {
-          loadNextChapter({ saveLast: true });
-          return;
-        }
-        if (state.index >= urls.length) return;
-        state.history.push(urls.length - state.index);
-        state.index = urls.length;
-        render();
+  if (nextIndex >= urls.length) {
+    const url = findNextChapterUrl() || nextChapterUrl;
+    if (url) {
+      loadNextChapter({ saveLast: true });
+      return;
+    }
+    if (state.index >= urls.length) return;
+    state.history.push(urls.length - state.index);
+    state.index = urls.length;
+    render();
+    return;
+  }
+
+  // 次の位置が「最終画像単独表示」になる場合、
+  // その単独表示をスキップして直接次章へ
+  if (nextIndex === urls.length - 1 && isDouble()) {
+    const lastAspect = await getAspect(urls[urls.length - 1]);
+    if (!lastAspect.isWide) {
+      // 縦長なら、次に進んだら2枚モードで単独表示になる
+      // (残り1枚なのでペアが作れない)
+      const url = findNextChapterUrl() || nextChapterUrl;
+      if (url) {
+        loadNextChapter({ saveLast: true });
         return;
       }
+    }
+  }
 
-      state.history.push(step);
-      state.index = nextIndex;
-      render();
-    };
+  state.history.push(step);
+  state.index = nextIndex;
+  render();
+};
 
     const goPrev = () => {
       if (state.history.length === 0) return;
