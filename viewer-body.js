@@ -1,9 +1,10 @@
 /* ============================================================
  * Manga Spread Viewer (Userscript edition)
- * Version: 2.1.2
+ * Version: 2.1.3
  * Updated: 2026-04-21
  *
  * Changelog:
+ *   2.1.3 - momon-ga.com の /magazine/ カテゴリも章ページ判定の対象に追加。
  *   2.1.2 - 章末で見開き表示が完結した場合は次章への継ぎ足しを行わない
  *           よう判定を厳密化。最終画像が単独表示(残り1枚)になる場合
  *           のみ継ぎ足し対象とする。あわせて、見開き途中で次に最終
@@ -48,7 +49,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '2.1.2';
+  const VERSION = '2.1.3';
   const DOMAIN = location.hostname;
   const AUTO_KEY = 'auto:' + DOMAIN;
   const BRIDGE_KEY = '__mv_bridge';
@@ -63,7 +64,7 @@
     '#post-hentai img',
   ];
 
-  const CHAPTER_URL_PATTERN = /chapter[-_]?\d|\/fanzine\/mo\d+/i;
+  const CHAPTER_URL_PATTERN = /chapter[-_]?\d|\/(?:fanzine|magazine)\/mo\d+/i;
   const isChapterPage = () => CHAPTER_URL_PATTERN.test(location.href);
 
   const PATH_DEPTH_THRESHOLD = 3;
